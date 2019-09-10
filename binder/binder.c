@@ -152,7 +152,7 @@ static uint32_t binder_debug_mask = BINDER_DEBUG_USER_ERROR |
 //yangbin tmp comments because it will cause crash when we insmod
 //module_param_named(debug_mask, binder_debug_mask, uint, S_IWUSR | S_IRUGO);
 
-static char *binder_devices_param = CONFIG_ANDROID_BINDER_DEVICES;
+static char *binder_devices_param = (strcmp(CONFIG_ANDROID_BINDER_DEVICES, "")) ? CONFIG_ANDROID_BINDER_DEVICES : "hostbinder,hostvndbinder,hosthwbinder";
 module_param_named(devices, binder_devices_param, charp, 0444);
 
 static DECLARE_WAIT_QUEUE_HEAD(binder_user_error_wait);
