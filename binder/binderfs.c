@@ -26,7 +26,6 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/user_namespace.h>
-#include <linux/version.h>
 #include <uapi/asm-generic/errno-base.h>
 #include <uapi/linux/android/binder.h>
 
@@ -478,19 +477,6 @@ static struct dentry *binderfs_mount(struct file_system_type *fs_type,
 				     int flags, const char *dev_name,
 				     void *data)
 {
-
-/*
-    sget_userns function is removed in kernel version higher than 5.3
-    This will fail the compiling of binderfs, since currently used binderfs is
-    backport from kernel 4.21
-    In the latest binderfs code, these codes are changed too.
-    So, this is a hotfix which enabing CIC on kernel high than 5.3.0
-    (TODO) Update binderfs code
-*/
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
-        return mount_nodev(fs_type, flags, data, binderfs_fill_super);
-
-#else
 	struct super_block *sb;
 	struct ipc_namespace *ipc_ns = current->nsproxy->ipc_ns;
 
@@ -513,8 +499,6 @@ static struct dentry *binderfs_mount(struct file_system_type *fs_type,
 	}
 
 	return dget(sb->s_root);
-
-#endif
 }
 
 static void binderfs_kill_super(struct super_block *sb)
