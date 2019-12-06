@@ -5,7 +5,6 @@
 
 #include <linux/export.h>
 #include <linux/fs.h>
-#include <linux/kconfig.h>
 #include <linux/list.h>
 #include <linux/miscdevice.h>
 #include <linux/mutex.h>
@@ -38,22 +37,13 @@ struct binder_device {
 
 extern const struct file_operations binder_fops;
 
-#if IS_ENABLED(CONFIG_ANDROID_BINDERFS)
+//#ifdef CONFIG_ANDROID_BINDERFS
 extern bool is_binderfs_device(const struct inode *inode);
-#else
-static inline bool is_binderfs_device(const struct inode *inode)
-{
-	return false;
-}
-#endif
-
-#if IS_ENABLED(CONFIG_ANDROID_BINDERFS)
-extern int __init init_binderfs(void);
-#else
-static inline int __init init_binderfs(void)
-{
-	return 0;
-}
-#endif
+//#else
+//static inline bool is_binderfs_device(const struct inode *inode)
+//{
+//	return false;
+//}
+//#endif
 
 #endif /* _LINUX_BINDER_INTERNAL_H */
