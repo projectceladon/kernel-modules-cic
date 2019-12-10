@@ -1,4 +1,15 @@
-#include "deps.h"
+#include <linux/sched.h>
+#include <linux/file.h>
+#include <linux/fdtable.h>
+#include <linux/atomic.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/kallsyms.h>
+#include <linux/version.h>
+#include <linux/ipc_namespace.h>
+
+#define BINDERFS_SUPER_MAGIC   0x6c6f6f70
 
 static struct vm_struct *(*get_vm_area_ptr)(unsigned long, unsigned long) = NULL;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
@@ -20,8 +31,6 @@ static int (*security_binder_transfer_binder_ptr)(struct task_struct *from, stru
 static int (*security_binder_transfer_file_ptr)(struct task_struct *from, struct task_struct *to, struct file *file) = NULL;
 static void (*mmput_async_ptr)(struct mm_struct *) = NULL;
 static void (*put_ipc_ns_ptr)(struct ipc_namespace *) = NULL;
-static int (*task_work_add_ptr)(struct task_struct *, struct callback_head *, bool) = NULL;
-static struct ipc_namespace *(*show_init_ipc_ns_ptr)(void) = NULL;
 
 struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
 {
@@ -136,115 +145,17 @@ void mmput_async(struct mm_struct *mm)
 	mmput_async_ptr(mm);
 }
 
+bool is_binderfs_device(const struct inode *inode)
+{
+        if (inode->i_sb->s_magic == BINDERFS_SUPER_MAGIC)
+                return true;
+
+        return false;
+}
+
 void put_ipc_ns(struct ipc_namespace *ns)
 {
         if (!put_ipc_ns_ptr)
                 put_ipc_ns_ptr = kallsyms_lookup_name("put_ipc_ns");
-        if(put_ipc_ns_ptr)
-                put_ipc_ns_ptr(ns);
-}
-
-int task_work_add(struct task_struct *task, struct callback_head *twork, bool notify)
-{
-        if(!task_work_add_ptr)
-		task_work_add_ptr = kallsyms_lookup_name("task_work_add");
-        if(task_work_add_ptr)
-  	        return task_work_add_ptr(task, twork, notify);
-        else
-                return -1;
-}
-
-struct ipc_namespace *show_init_ipc_ns_compat(void)
-{
-       if(!show_init_ipc_ns_ptr)
-	       show_init_ipc_ns_ptr = kallsyms_lookup_name("show_init_ipc_ns");
-       if(show_init_ipc_ns_ptr)
-	       return show_init_ipc_ns_ptr();
-       else
-	       return NULL;
-}
-
-static inline void __clear_open_fd(unsigned int fd, struct fdtable *fdt)
-{
-        __clear_bit(fd, fdt->open_fds);
-        __clear_bit(fd / BITS_PER_LONG, fdt->full_fds_bits);
-}
-
-static void __put_unused_fd(struct files_struct *files, unsigned int fd)
-{
-        struct fdtable *fdt = files_fdtable(files);
-        __clear_open_fd(fd, fdt);
-        if (fd < files->next_fd)
-                files->next_fd = fd;
-}
-
-static int close_fd_get_file_backport(unsigned int fd, struct file **res)
-{
-        struct files_struct *files = current->files;
-        struct file *file;
-        struct fdtable *fdt;
-
-        spin_lock(&files->file_lock);
-        fdt = files_fdtable(files);
-        if (fd >= fdt->max_fds)
-                goto out_unlock;
-        file = fdt->fd[fd];
-        if (!file)
-                goto out_unlock;
-        rcu_assign_pointer(fdt->fd[fd], NULL);
-        __put_unused_fd(files, fd);
-        spin_unlock(&files->file_lock);
-        get_file(file);
-        *res = file;
-        return filp_close(file, files);
-
-out_unlock:
-        spin_unlock(&files->file_lock);
-        *res = NULL;
-        return -ENOENT;
-}
-
-int __close_fd_get_file_compat(unsigned int fd, struct file **res)
-{
-    int (*close_fd_get_file_ptr)(unsigned int fd, struct file **res) = NULL;
-
-    close_fd_get_file_ptr = kallsyms_lookup_name("__close_fd_get_file");
-    if(close_fd_get_file_ptr)
-	return close_fd_get_file_ptr(fd, res);
-    else
-        return close_fd_get_file_backport(fd, res);
-}
-
-struct ipc_namespace *get_ipc_ns_exported_compat(struct ipc_namespace *ns)
-{
-    struct ipc_namespace *(*get_ipc_ns_exported_ptr)(struct ipc_namespace *ns) = NULL;
-
-    get_ipc_ns_exported_ptr = kallsyms_lookup_name("get_ipc_ns_exported");
-    if(get_ipc_ns_exported_ptr)
-        return get_ipc_ns_exported_ptr(ns);
-    else
-        return get_ipc_ns(ns);
-}
-
-int ida_alloc_max_compat(struct ida *ida, unsigned int max, gfp_t gfp)
-{
-    int (*ida_alloc_max_ptr)(struct ida *, unsigned int, gfp_t) = NULL;
-
-    ida_alloc_max_ptr = kallsyms_lookup_name("ida_alloc_max");
-    if(ida_alloc_max_ptr)
-        return ida_alloc_max_ptr(ida, max, gfp);
-    else
-        return ida_simple_get(ida, 0, max, gfp);
-
-}
-
-void ida_free_compat(struct ida *ida, unsigned int id)
-{
-    void (*ida_free_ptr)(struct ida *, unsigned int) = NULL;
-    ida_free_ptr = kallsyms_lookup_name("ida_free");
-
-    if(ida_free_ptr)
-        return ida_free_ptr(ida, id);
-    else
-        return ida_simple_remove(ida, id);
+        put_ipc_ns_ptr(ns);
 }
